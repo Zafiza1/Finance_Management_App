@@ -1,0 +1,417 @@
+import type { ReactNode } from 'react';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type KeyboardTypeOptions,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
+
+import { addDays, addMonths, formatDate, formatNumber, parseAmount, todayISO } from '@/lib/format';
+import { colors, radius } from '@/lib/theme';
+
+export function Screen({
+  children,
+  scroll = true,
+  edges = [],
+  contentStyle,
+}: {
+  children: ReactNode;
+  scroll?: boolean;
+  edges?: Edge[];
+  contentStyle?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <SafeAreaView style={styles.screen} edges={edges}>
+      {scroll ? (
+        <ScrollView
+          contentContainerStyle={[styles.screenContent, contentStyle]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+      ) : (
+        <View style={[styles.screenContent, { flex: 1 }, contentStyle]}>{children}</View>
+      )}
+    </SafeAreaView>
+  );
+}
+
+export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  return <View style={[styles.card, style]}>{children}</View>;
+}
+
+export function Title({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  return <Text style={[styles.title, style]}>{children}</Text>;
+}
+
+export function Muted({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  return <Text style={[styles.muted, style]}>{children}</Text>;
+}
+
+export function SectionHeader({
+  title,
+  action,
+  onAction,
+}: {
+  title: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {action && (
+        <Pressable onPress={onAction} hitSlop={10}>
+          <Text style={styles.link}>{action}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+
+export function Button({
+  title,
+  onPress,
+  variant = 'primary',
+  disabled,
+  style,
+}: {
+  title: string;
+  onPress: () => void;
+  variant?: ButtonVariant;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      accessibilityRole="button"
+      style={({ pressed }) => [
+        styles.button,
+        styles[`button_${variant}`],
+        (pressed || disabled) && { opacity: 0.6 },
+        style,
+      ]}
+    >
+      <Text style={[styles.buttonText, styles[`buttonText_${variant}`]]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+export function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  secureTextEntry,
+  keyboardType,
+  autoCapitalize,
+  autoFocus,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder?: string;
+  secureTextEntry?: boolean;
+  keyboardType?: KeyboardTypeOptions;
+  autoCapitalize?: 'none' | 'sentences' | 'words';
+  autoFocus?: boolean;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.muted}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        autoFocus={autoFocus}
+      />
+    </View>
+  );
+}
+
+/** Rupiah input that formats thousands while typing. */
+export function AmountField({
+  label,
+  value,
+  onChange,
+  autoFocus,
+  large,
+}: {
+  label?: string;
+  value: number;
+  onChange: (n: number) => void;
+  autoFocus?: boolean;
+  large?: boolean;
+}) {
+  return (
+    <View style={styles.field}>
+      {label && <Text style={styles.label}>{label}</Text>}
+      <View style={[styles.amountBox, large && styles.amountBoxLarge]}>
+        <Text style={[styles.amountPrefix, large && styles.amountTextLarge]}>Rp</Text>
+        <TextInput
+          style={[styles.amountInput, large && styles.amountTextLarge]}
+          value={value ? formatNumber(value) : ''}
+          onChangeText={(t) => onChange(parseAmount(t))}
+          placeholder="0"
+          placeholderTextColor={colors.muted}
+          keyboardType="number-pad"
+          autoFocus={autoFocus}
+        />
+      </View>
+    </View>
+  );
+}
+
+export function ProgressBar({ pct, color = colors.primary }: { pct: number; color?: string }) {
+  const width = `${Math.max(0, Math.min(100, pct))}%` as const;
+  return (
+    <View style={styles.progressTrack}>
+      <View style={[styles.progressFill, { width, backgroundColor: color }]} />
+    </View>
+  );
+}
+
+export function Chip({
+  label,
+  selected,
+  onPress,
+  color = colors.primary,
+}: {
+  label: string;
+  selected?: boolean;
+  onPress: () => void;
+  color?: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}
+    >
+      <Text style={[styles.chipText, selected && { color: '#fff' }]}>{label}</Text>
+    </Pressable>
+  );
+}
+
+export function ChipRow({ children }: { children: ReactNode }) {
+  return <View style={styles.chipRow}>{children}</View>;
+}
+
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string; color?: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <View style={styles.segmented}>
+      {options.map((o) => {
+        const active = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            onPress={() => onChange(o.value)}
+            style={[styles.segment, active && { backgroundColor: o.color ?? colors.primary }]}
+          >
+            <Text style={[styles.segmentText, active && { color: '#fff' }]}>{o.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function DateStepper({
+  label,
+  value,
+  onChange,
+  monthSteps,
+}: {
+  label: string;
+  value: string;
+  onChange: (iso: string) => void;
+  monthSteps?: boolean;
+}) {
+  const step = (n: number) => onChange(monthSteps ? addMonths(value, n) : addDays(value, n));
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.dateRow}>
+        <Pressable style={styles.dateBtn} onPress={() => step(-1)} hitSlop={6}>
+          <Text style={styles.dateBtnText}>‹</Text>
+        </Pressable>
+        <Pressable style={{ flex: 1 }} onPress={() => onChange(todayISO())}>
+          <Text style={styles.dateText}>{formatDate(value)}</Text>
+          {value !== todayISO() && <Text style={styles.dateHint}>Ketuk untuk kembali ke hari ini</Text>}
+        </Pressable>
+        <Pressable style={styles.dateBtn} onPress={() => step(1)} hitSlop={6}>
+          <Text style={styles.dateBtnText}>›</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+export function ListRow({
+  icon,
+  title,
+  subtitle,
+  right,
+  onPress,
+}: {
+  icon?: string;
+  title: string;
+  subtitle?: string;
+  right?: ReactNode;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      style={({ pressed }) => [styles.listRow, pressed && { opacity: 0.6 }]}
+    >
+      {icon && <Text style={styles.listIcon}>{icon}</Text>}
+      <View style={{ flex: 1 }}>
+        <Text style={styles.listTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text style={styles.muted} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {right}
+    </Pressable>
+  );
+}
+
+export function Empty({ text }: { text: string }) {
+  return <Text style={[styles.muted, { textAlign: 'center', paddingVertical: 20 }]}>{text}</Text>;
+}
+
+export function Banner({
+  text,
+  tone = 'warning',
+  onPress,
+}: {
+  text: string;
+  tone?: 'warning' | 'danger' | 'info';
+  onPress?: () => void;
+}) {
+  const bg = tone === 'danger' ? colors.dangerSoft : tone === 'info' ? colors.primarySoft : colors.warningSoft;
+  return (
+    <Pressable onPress={onPress} disabled={!onPress} style={[styles.banner, { backgroundColor: bg }]}>
+      <Text style={styles.bannerText}>{text}</Text>
+    </Pressable>
+  );
+}
+
+export const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.bg },
+  screenContent: { padding: 16, paddingBottom: 40, gap: 12 },
+  card: {
+    backgroundColor: colors.card,
+    borderRadius: radius,
+    padding: 16,
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  title: { fontSize: 22, fontWeight: '700', color: colors.text },
+  muted: { fontSize: 13, color: colors.muted },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: colors.muted, letterSpacing: 1, textTransform: 'uppercase' },
+  link: { color: colors.primary, fontWeight: '600' },
+  button: { borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, alignItems: 'center' },
+  button_primary: { backgroundColor: colors.primary },
+  button_secondary: { backgroundColor: colors.primarySoft },
+  button_danger: { backgroundColor: colors.dangerSoft },
+  button_ghost: { backgroundColor: 'transparent' },
+  buttonText: { fontSize: 16, fontWeight: '700' },
+  buttonText_primary: { color: '#fff' },
+  buttonText_secondary: { color: colors.primaryDark },
+  buttonText_danger: { color: colors.expense },
+  buttonText_ghost: { color: colors.primary },
+  field: { gap: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: colors.muted },
+  input: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: colors.text,
+  },
+  amountBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+  },
+  amountBoxLarge: { paddingVertical: 8 },
+  amountPrefix: { fontSize: 16, fontWeight: '700', color: colors.muted, marginRight: 6 },
+  amountInput: { flex: 1, fontSize: 16, paddingVertical: 12, color: colors.text, fontWeight: '600' },
+  amountTextLarge: { fontSize: 32, fontWeight: '800' },
+  progressTrack: { height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 4 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  chipText: { fontSize: 14, color: colors.text, fontWeight: '500' },
+  segmented: { flexDirection: 'row', backgroundColor: colors.border, borderRadius: 12, padding: 4 },
+  segment: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
+  segmentText: { fontWeight: '700', color: colors.muted },
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dateBtn: { paddingHorizontal: 18, paddingVertical: 10 },
+  dateBtnText: { fontSize: 24, color: colors.primary, fontWeight: '700' },
+  dateText: { textAlign: 'center', fontSize: 16, fontWeight: '600', color: colors.text },
+  dateHint: { textAlign: 'center', fontSize: 11, color: colors.muted },
+  listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  listIcon: { fontSize: 24, width: 36, textAlign: 'center' },
+  listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
+  banner: { borderRadius: 12, padding: 12 },
+  bannerText: { color: colors.text, fontWeight: '600' },
+});
