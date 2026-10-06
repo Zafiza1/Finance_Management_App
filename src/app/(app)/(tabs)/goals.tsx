@@ -5,7 +5,7 @@ import { GoalCard, goalProgress } from '@/components/finance';
 import { Button, Card, Empty, Muted, Screen, Title } from '@/components/ui';
 import { formatRp, parseISODate, todayISO } from '@/lib/format';
 import { useBalances, useData } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { useColors } from '@/lib/theme';
 import type { Goal } from '@/lib/types';
 
 /** How much must be saved per month to hit the target date. */
@@ -19,6 +19,7 @@ function monthlyNeed(goal: Goal, current: number): string | null {
 }
 
 export default function GoalsScreen() {
+  const colors = useColors();
   const data = useData();
   const balances = useBalances();
 

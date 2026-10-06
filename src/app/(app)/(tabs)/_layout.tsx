@@ -1,8 +1,8 @@
 import { router } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { colors } from '@/lib/theme';
+import { makeStyles, useColors } from '@/lib/theme';
 
 const icon = (emoji: string) =>
   function TabIcon({ focused }: { focused: boolean }) {
@@ -10,6 +10,8 @@ const icon = (emoji: string) =>
   };
 
 export default function TabsLayout() {
+  const s = useStyles();
+  const colors = useColors();
   return (
     <Tabs
       screenOptions={{
@@ -45,7 +47,7 @@ export default function TabsLayout() {
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   addButton: {
     width: 52,
     height: 52,
@@ -61,4 +63,4 @@ const s = StyleSheet.create({
     elevation: 5,
   },
   addText: { color: '#fff', fontSize: 30, fontWeight: '400', marginTop: -2 },
-});
+}));

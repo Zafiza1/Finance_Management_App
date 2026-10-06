@@ -4,10 +4,11 @@ import { Alert, Pressable, Text, View } from 'react-native';
 import { Button, Card, Field, ListRow, Muted, Screen, Segmented } from '@/components/ui';
 import { POCKET_COLORS } from '@/lib/defaults';
 import { useData, useStore } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { useColors } from '@/lib/theme';
 import type { Category, CategoryType } from '@/lib/types';
 
 export default function CategoriesScreen() {
+  const colors = useColors();
   const data = useData();
   const { saveCategory, deleteCategory } = useStore();
   const [type, setType] = useState<CategoryType>('EXPENSE');

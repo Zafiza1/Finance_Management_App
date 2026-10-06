@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 
-import { ProgressBar, styles as ui } from '@/components/ui';
+import { ProgressBar, useUiStyles } from '@/components/ui';
 import { pocketBalance, type Activity, type Balances, type BudgetStatus } from '@/lib/finance';
 import { formatDate, formatPct, formatRp } from '@/lib/format';
 import { useStore } from '@/lib/store';
-import { budgetColors, colors, radius } from '@/lib/theme';
+import { budgetColors, makeStyles, radius, useColors, type ThemeColors } from '@/lib/theme';
 import type { Goal, Pocket } from '@/lib/types';
 
 export function PocketCard({
@@ -17,6 +17,8 @@ export function PocketCard({
   balance: number;
   budget: BudgetStatus | null;
 }) {
+  const s = useStyles();
+  const ui = useUiStyles();
   return (
     <Pressable
       onPress={() => router.push({ pathname: '/pocket/[id]', params: { id: pocket.id } })}
@@ -58,6 +60,8 @@ export function PocketPicker({
   onChange: (id: string) => void;
   exclude?: string | null;
 }) {
+  const s = useStyles();
+  const ui = useUiStyles();
   return (
     <View style={s.pickerGrid}>
       {pockets
@@ -86,17 +90,20 @@ export function PocketPicker({
   );
 }
 
-const KIND_STYLE = {
-  INCOME: { sign: '+ ', color: colors.income, label: 'Income' },
-  EXPENSE: { sign: '- ', color: colors.expense, label: 'Expense' },
-  TRANSFER: { sign: '→ ', color: colors.transfer, label: 'Transfer' },
-  ALLOCATION: { sign: '↘ ', color: colors.allocation, label: 'Alokasi' },
-} as const;
+const kindStyle = (kind: Activity['kind'], colors: ThemeColors) =>
+  ({
+    INCOME: { sign: '+ ', color: colors.income, label: 'Pemasukan' },
+    EXPENSE: { sign: '- ', color: colors.expense, label: 'Pengeluaran' },
+    TRANSFER: { sign: '→ ', color: colors.transfer, label: 'Transfer' },
+    ALLOCATION: { sign: '↘ ', color: colors.allocation, label: 'Alokasi' },
+  })[kind];
 
 export function ActivityRow({ item }: { item: Activity }) {
-  const k = KIND_STYLE[item.kind];
+  const s = useStyles();
+  const ui = useUiStyles();
+  const k = kindStyle(item.kind, useColors());
   return (
-    <Pressable onPress={() => showActivity(item)} style={({ pressed }) => [ui.listRow, pressed && { opacity: 0.6 }]}>
+    <Pressable onPress={() => showActivity(item, k)} style={({ pressed }) => [ui.listRow, pressed && { opacity: 0.6 }]}>
       <Text style={ui.listIcon}>{item.icon}</Text>
       <View style={{ flex: 1 }}>
         <Text style={ui.listTitle} numberOfLines={1}>
@@ -114,8 +121,7 @@ export function ActivityRow({ item }: { item: Activity }) {
   );
 }
 
-function showActivity(item: Activity) {
-  const k = KIND_STYLE[item.kind];
+function showActivity(item: Activity, k: { sign: string; label: string }) {
   const lines = [`${k.label} · ${formatDate(item.date)}`, item.subtitle, item.note && `Catatan: ${item.note}`];
   Alert.alert(`${k.sign}${formatRp(item.amount)}`, lines.filter(Boolean).join('\n'), [
     { text: 'Tutup', style: 'cancel' },
@@ -148,6 +154,8 @@ export function goalProgress(goal: Goal, balances: Balances) {
 
 export function GoalCard({ goal, balances, onPress }: { goal: Goal; balances: Balances; onPress?: () => void }) {
   const { current, pct } = goalProgress(goal, balances);
+  const ui = useUiStyles();
+  const colors = useColors();
   return (
     <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
       <View style={{ gap: 6 }}>
@@ -168,7 +176,7 @@ export function GoalCard({ goal, balances, onPress }: { goal: Goal; balances: Ba
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   pocketCard: {
     flexBasis: '47%',
     flexGrow: 1,
@@ -198,4 +206,4 @@ const s = StyleSheet.create({
   },
   pickerName: { fontSize: 14, fontWeight: '600', color: colors.text },
   amount: { fontSize: 15, fontWeight: '700' },
-});
+}));

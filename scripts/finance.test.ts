@@ -4,8 +4,17 @@
  */
 import assert from 'node:assert/strict';
 
-import { budgetStatus, buildActivity, computeBalances, dailyLimit, validateData } from '../src/lib/finance';
-import type { Pocket, Transaction, Transfer, UserData } from '../src/lib/types';
+import {
+  applyRecurring,
+  budgetStatus,
+  buildActivity,
+  computeBalances,
+  dailyLimit,
+  nextRecurringDate,
+  occurrenceDate,
+  validateData,
+} from '../src/lib/finance';
+import type { Pocket, RecurringRule, Transaction, Transfer, UserData } from '../src/lib/types';
 
 let seq = 0;
 const pocket = (name: string, extra: Partial<Pocket> = {}): Pocket => ({
@@ -50,6 +59,7 @@ const data: UserData = {
   ],
   categories: [],
   goals: [],
+  recurring: [],
   transactions: [
     tx('INCOME', 4_500_000, null),
     tx('ALLOCATION', 1_000_000, 'Kebutuhan'),
@@ -114,5 +124,56 @@ assert.equal(limit.perDay, Math.floor(limit.spendable / 22));
 const activity = buildActivity(data);
 assert.equal(activity.length, data.transactions.length + data.transfers.length);
 assert.equal(activity[0].date, '2026-10-10');
+
+// Recurring: monthly rules keep their day-of-month without drifting
+assert.deepEqual(
+  [0, 1, 2, 3].map((n) => occurrenceDate({ startDate: '2026-01-31', frequency: 'MONTHLY' }, n)),
+  ['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30'],
+);
+assert.equal(occurrenceDate({ startDate: '2026-10-01', frequency: 'WEEKLY' }, 2), '2026-10-15');
+
+const rule = (extra: Partial<RecurringRule>): RecurringRule => ({
+  id: `r${++seq}`,
+  type: 'EXPENSE',
+  amount: 100_000,
+  pocketId: 'Kebutuhan',
+  categoryId: null,
+  note: '',
+  frequency: 'MONTHLY',
+  startDate: '2026-08-15',
+  occurrences: 0,
+  endDate: null,
+  active: true,
+  createdAt: '',
+  ...extra,
+});
+const makeTx = (t: Omit<Transaction, 'id' | 'createdAt'>): Transaction => ({ ...t, id: `g${++seq}`, createdAt: `${t.date}T12:00:00Z` });
+
+// Backfills every due occurrence up to today and advances the rule
+const bill = rule({});
+const run1 = applyRecurring({ ...data, recurring: [bill] }, '2026-10-20', makeTx);
+assert.equal(run1.created, 3); // Aug 15, Sep 15, Oct 15
+assert.equal(run1.data.recurring[0].occurrences, 3);
+assert.equal(nextRecurringDate(run1.data.recurring[0]), '2026-11-15');
+assert.equal(computeBalances(run1.data).pockets.Kebutuhan.balance, 700_000);
+// Running again on the same day records nothing new
+assert.equal(applyRecurring(run1.data, '2026-10-20', makeTx).created, 0);
+
+// An expense that would overdraw a pocket stops and stays due
+const big = rule({ amount: 600_000, pocketId: 'Transportasi' });
+const run2 = applyRecurring({ ...data, recurring: [big] }, '2026-10-20', makeTx);
+assert.equal(run2.created, 0);
+assert.equal(run2.blocked.length, 1);
+assert.equal(validateData(run2.data), null);
+
+// Income lands in the unallocated balance; paused rules are skipped and ended rules stop
+const salary = rule({ type: 'INCOME', pocketId: null, amount: 1_000_000, startDate: '2026-10-01' });
+const paused = rule({ active: false });
+const ended = rule({ endDate: '2026-08-31' });
+const run3 = applyRecurring({ ...data, recurring: [salary, paused, ended] }, '2026-10-20', makeTx);
+assert.equal(run3.created, 2); // salary Oct 1 + ended rule's single Aug 15 occurrence
+assert.equal(computeBalances(run3.data).unallocated, 1_000_000);
+assert.equal(nextRecurringDate(run3.data.recurring[2]), null);
+assert.ok(run3.data.transactions.every((t) => !t.recurringId || t.recurringId !== paused.id));
 
 console.log('✓ finance rules match the spec');

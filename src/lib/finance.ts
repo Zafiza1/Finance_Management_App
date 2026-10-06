@@ -1,5 +1,5 @@
-import { daysInMonth, formatPct, formatRp, parseISODate, toISODate } from './format';
-import type { Category, Pocket, UserData } from './types';
+import { addDays, addMonths, daysInMonth, formatPct, formatRp, parseISODate, toISODate } from './format';
+import type { Category, Frequency, Pocket, RecurringRule, Transaction, UserData } from './types';
 
 export interface PocketStats {
   balance: number;
@@ -235,6 +235,7 @@ export function buildActivity(data: UserData): Activity[] {
       title = `Alokasi ke ${pocketName(t.pocketId)}`;
       subtitle = 'Alokasi';
     }
+    if (t.recurringId) subtitle = `🔁 ${subtitle}`;
     return {
       id: t.id,
       kind: t.type,
@@ -364,4 +365,108 @@ export function buildInsights(data: UserData, year: number, month: number, today
     }
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Recurring transactions
+
+export const FREQUENCY_LABEL: Record<Frequency, string> = {
+  DAILY: 'Harian',
+  WEEKLY: 'Mingguan',
+  MONTHLY: 'Bulanan',
+  YEARLY: 'Tahunan',
+};
+
+/** Date of occurrence n (0-based), always computed from the start date to avoid drift. */
+export function occurrenceDate(rule: Pick<RecurringRule, 'startDate' | 'frequency'>, n: number): string {
+  switch (rule.frequency) {
+    case 'DAILY':
+      return addDays(rule.startDate, n);
+    case 'WEEKLY':
+      return addDays(rule.startDate, n * 7);
+    case 'MONTHLY':
+      return addMonths(rule.startDate, n);
+    case 'YEARLY':
+      return addMonths(rule.startDate, n * 12);
+  }
+}
+
+/** The next date the rule will record, or null when it has ended. */
+export function nextRecurringDate(rule: RecurringRule): string | null {
+  const date = occurrenceDate(rule, rule.occurrences);
+  return rule.endDate && date > rule.endDate ? null : date;
+}
+
+export interface RecurringRun {
+  data: UserData;
+  created: number;
+  /** Rules that are due but could not be recorded (e.g. pocket balance too low). */
+  blocked: RecurringRule[];
+}
+
+const MAX_RECURRING_PER_RUN = 500;
+
+/**
+ * Records every due occurrence up to and including `today`, oldest first across
+ * all rules, so an income due earlier can fund an expense due later. A rule
+ * whose transaction would break a balance rule stops and stays due, so nothing
+ * is silently skipped.
+ */
+export function applyRecurring(
+  data: UserData,
+  today: string,
+  makeTx: (t: Omit<Transaction, 'id' | 'createdAt'>) => Transaction,
+): RecurringRun {
+  const rules = data.recurring.map((r) => ({ ...r }));
+  const blocked = new Set<string>();
+  const activePockets = new Set(data.pockets.filter((p) => !p.archived).map((p) => p.id));
+  let next = data;
+  let created = 0;
+
+  while (created < MAX_RECURRING_PER_RUN) {
+    let rule: RecurringRule | undefined;
+    let date: string | null = null;
+    for (const r of rules) {
+      if (!r.active || blocked.has(r.id)) continue;
+      const d = nextRecurringDate(r);
+      if (d && d <= today && (!date || d < date)) {
+        rule = r;
+        date = d;
+      }
+    }
+    if (!rule || !date) break;
+
+    if (rule.type === 'EXPENSE' && !(rule.pocketId && activePockets.has(rule.pocketId))) {
+      blocked.add(rule.id);
+      continue;
+    }
+    const candidate: UserData = {
+      ...next,
+      transactions: [
+        ...next.transactions,
+        makeTx({
+          type: rule.type,
+          amount: rule.amount,
+          pocketId: rule.type === 'EXPENSE' ? rule.pocketId : null,
+          categoryId: rule.categoryId,
+          date,
+          note: rule.note,
+          recurringId: rule.id,
+        }),
+      ],
+    };
+    if (validateData(candidate)) {
+      blocked.add(rule.id);
+      continue;
+    }
+    next = candidate;
+    rule.occurrences += 1;
+    created += 1;
+  }
+
+  return {
+    data: { ...next, recurring: rules },
+    created,
+    blocked: rules.filter((r) => blocked.has(r.id)),
+  };
 }

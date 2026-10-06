@@ -13,13 +13,14 @@ import {
   Field,
   Muted,
   Screen,
-  styles as ui,
+  useUiStyles,
 } from '@/components/ui';
 import { GOAL_ICONS } from '@/lib/defaults';
 import { addMonths, todayISO } from '@/lib/format';
 import { useBalances, useData, useStore } from '@/lib/store';
 
 export default function GoalFormScreen() {
+  const ui = useUiStyles();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const data = useData();
   const balances = useBalances();

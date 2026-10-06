@@ -1,15 +1,17 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo } from 'react';
-import { Alert, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Switch, Text, View } from 'react-native';
 
 import { ActivityRow } from '@/components/finance';
 import { Button, Card, Empty, Muted, ProgressBar, Screen, SectionHeader } from '@/components/ui';
 import { buildActivity, pocketBudgetStatus } from '@/lib/finance';
 import { formatRp, todayISO } from '@/lib/format';
 import { useBalances, useData, useStore } from '@/lib/store';
-import { budgetColors, colors } from '@/lib/theme';
+import { budgetColors, makeStyles, useColors } from '@/lib/theme';
 
 export default function PocketDetailScreen() {
+  const s = useStyles();
+  const colors = useColors();
   const { id } = useLocalSearchParams<{ id: string }>();
   const data = useData();
   const balances = useBalances();
@@ -108,6 +110,8 @@ export default function PocketDetailScreen() {
 }
 
 function StatRow({ label, value }: { label: string; value: number }) {
+  const s = useStyles();
+  const colors = useColors();
   return (
     <View style={s.row}>
       <Muted>{label}</Muted>
@@ -116,10 +120,10 @@ function StatRow({ label, value }: { label: string; value: number }) {
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   hero: { borderRadius: 20, padding: 20, gap: 4 },
   heroLabel: { color: '#ffffffcc', fontWeight: '600' },
   heroAmount: { color: '#fff', fontSize: 32, fontWeight: '800' },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   cardTitle: { fontWeight: '700', color: colors.text, fontSize: 15 },
-});
+}));

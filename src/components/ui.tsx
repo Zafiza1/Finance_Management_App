@@ -14,7 +14,7 @@ import {
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
 import { addDays, addMonths, formatDate, formatNumber, parseAmount, todayISO } from '@/lib/format';
-import { colors, radius } from '@/lib/theme';
+import { makeStyles, radius, useColors } from '@/lib/theme';
 
 export function Screen({
   children,
@@ -27,6 +27,7 @@ export function Screen({
   edges?: Edge[];
   contentStyle?: StyleProp<ViewStyle>;
 }) {
+  const styles = useUiStyles();
   return (
     <SafeAreaView style={styles.screen} edges={edges}>
       {scroll ? (
@@ -44,14 +45,17 @@ export function Screen({
 }
 
 export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const styles = useUiStyles();
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
 export function Title({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  const styles = useUiStyles();
   return <Text style={[styles.title, style]}>{children}</Text>;
 }
 
 export function Muted({ children, style }: { children: ReactNode; style?: StyleProp<TextStyle> }) {
+  const styles = useUiStyles();
   return <Text style={[styles.muted, style]}>{children}</Text>;
 }
 
@@ -64,6 +68,7 @@ export function SectionHeader({
   action?: string;
   onAction?: () => void;
 }) {
+  const styles = useUiStyles();
   return (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -91,6 +96,7 @@ export function Button({
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
+  const styles = useUiStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -127,6 +133,8 @@ export function Field({
   autoCapitalize?: 'none' | 'sentences' | 'words';
   autoFocus?: boolean;
 }) {
+  const styles = useUiStyles();
+  const colors = useColors();
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -159,6 +167,8 @@ export function AmountField({
   autoFocus?: boolean;
   large?: boolean;
 }) {
+  const styles = useUiStyles();
+  const colors = useColors();
   return (
     <View style={styles.field}>
       {label && <Text style={styles.label}>{label}</Text>}
@@ -178,11 +188,13 @@ export function AmountField({
   );
 }
 
-export function ProgressBar({ pct, color = colors.primary }: { pct: number; color?: string }) {
+export function ProgressBar({ pct, color }: { pct: number; color?: string }) {
+  const styles = useUiStyles();
+  const colors = useColors();
   const width = `${Math.max(0, Math.min(100, pct))}%` as const;
   return (
     <View style={styles.progressTrack}>
-      <View style={[styles.progressFill, { width, backgroundColor: color }]} />
+      <View style={[styles.progressFill, { width, backgroundColor: color ?? colors.primary }]} />
     </View>
   );
 }
@@ -191,17 +203,19 @@ export function Chip({
   label,
   selected,
   onPress,
-  color = colors.primary,
+  color,
 }: {
   label: string;
   selected?: boolean;
   onPress: () => void;
   color?: string;
 }) {
+  const styles = useUiStyles();
+  const colors = useColors();
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}
+      style={[styles.chip, selected && { backgroundColor: color ?? colors.primary, borderColor: color ?? colors.primary }]}
     >
       <Text style={[styles.chipText, selected && { color: '#fff' }]}>{label}</Text>
     </Pressable>
@@ -209,6 +223,7 @@ export function Chip({
 }
 
 export function ChipRow({ children }: { children: ReactNode }) {
+  const styles = useUiStyles();
   return <View style={styles.chipRow}>{children}</View>;
 }
 
@@ -221,6 +236,8 @@ export function Segmented<T extends string>({
   value: T;
   onChange: (v: T) => void;
 }) {
+  const styles = useUiStyles();
+  const colors = useColors();
   return (
     <View style={styles.segmented}>
       {options.map((o) => {
@@ -250,6 +267,7 @@ export function DateStepper({
   onChange: (iso: string) => void;
   monthSteps?: boolean;
 }) {
+  const styles = useUiStyles();
   const step = (n: number) => onChange(monthSteps ? addMonths(value, n) : addDays(value, n));
   return (
     <View style={styles.field}>
@@ -283,6 +301,7 @@ export function ListRow({
   right?: ReactNode;
   onPress?: () => void;
 }) {
+  const styles = useUiStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -306,6 +325,7 @@ export function ListRow({
 }
 
 export function Empty({ text }: { text: string }) {
+  const styles = useUiStyles();
   return <Text style={[styles.muted, { textAlign: 'center', paddingVertical: 20 }]}>{text}</Text>;
 }
 
@@ -318,6 +338,8 @@ export function Banner({
   tone?: 'warning' | 'danger' | 'info';
   onPress?: () => void;
 }) {
+  const styles = useUiStyles();
+  const colors = useColors();
   const bg = tone === 'danger' ? colors.dangerSoft : tone === 'info' ? colors.primarySoft : colors.warningSoft;
   return (
     <Pressable onPress={onPress} disabled={!onPress} style={[styles.banner, { backgroundColor: bg }]}>
@@ -326,7 +348,7 @@ export function Banner({
   );
 }
 
-export const styles = StyleSheet.create({
+export const useUiStyles = makeStyles((colors) => ({
   screen: { flex: 1, backgroundColor: colors.bg },
   screenContent: { padding: 16, paddingBottom: 40, gap: 12 },
   card: {
@@ -414,4 +436,4 @@ export const styles = StyleSheet.create({
   listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },
   banner: { borderRadius: 12, padding: 12 },
   bannerText: { color: colors.text, fontWeight: '600' },
-});
+}));

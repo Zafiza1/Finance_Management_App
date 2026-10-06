@@ -1,13 +1,15 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, Switch, Text, View } from 'react-native';
 
-import { AmountField, Button, Card, Field, Muted, Screen, styles as ui } from '@/components/ui';
+import { AmountField, Button, Card, Field, Muted, Screen, useUiStyles } from '@/components/ui';
 import { POCKET_COLORS, POCKET_ICONS } from '@/lib/defaults';
 import { useData, useStore } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { makeStyles, useColors } from '@/lib/theme';
 
 export default function PocketFormScreen() {
+  const s = useStyles();
+  const ui = useUiStyles();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const data = useData();
   const { savePocket, deletePocket, setPocketArchived } = useStore();
@@ -102,6 +104,8 @@ function ToggleRow({
   value: boolean;
   onChange: (v: boolean) => void;
 }) {
+  const ui = useUiStyles();
+  const colors = useColors();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <View style={{ flex: 1 }}>
@@ -113,7 +117,7 @@ function ToggleRow({
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   preview: { borderRadius: 20, padding: 20, alignItems: 'center', gap: 4 },
   previewName: { color: '#fff', fontSize: 18, fontWeight: '800' },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -129,4 +133,4 @@ const s = StyleSheet.create({
   },
   swatch: { width: 36, height: 36, borderRadius: 18 },
   swatchActive: { borderWidth: 3, borderColor: colors.text },
-});
+}));

@@ -5,8 +5,9 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { createDefaultData } from './defaults';
-import { computeBalances, validateData } from './finance';
-import type { Category, Goal, Pocket, Transaction, User, UserData } from './types';
+import { applyRecurring, computeBalances, occurrenceDate, validateData } from './finance';
+import { todayISO } from './format';
+import type { Category, Goal, Pocket, RecurringRule, Settings, Transaction, User, UserData } from './types';
 
 const newId = () => Crypto.randomUUID();
 const nowISO = () => new Date().toISOString();
@@ -19,7 +20,31 @@ async function hashPassword(password: string, salt: string): Promise<string> {
   return hash;
 }
 
-const EMPTY_DATA: UserData = { pockets: [], categories: [], transactions: [], transfers: [], goals: [] };
+const EMPTY_DATA: UserData = {
+  pockets: [],
+  categories: [],
+  transactions: [],
+  transfers: [],
+  goals: [],
+  recurring: [],
+};
+
+export const DEFAULT_SETTINGS: Settings = {
+  theme: 'system',
+  dailyReminder: false,
+  reminderTime: 20 * 60,
+  budgetAlerts: false,
+  recurringAlerts: false,
+};
+
+/** Checks the shape of imported backup data and fills fields added in later versions. */
+function normalizeData(raw: unknown): UserData | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const d = raw as Partial<UserData>;
+  const keys = ['pockets', 'categories', 'transactions', 'transfers', 'goals'] as const;
+  if (!keys.every((k) => Array.isArray(d[k]))) return null;
+  return { ...(d as UserData), recurring: Array.isArray(d.recurring) ? d.recurring : [] };
+}
 
 /** null on success, otherwise a user-facing error message. */
 export type Result = string | null;
@@ -30,11 +55,19 @@ interface NewEntry {
   note: string;
 }
 
+export interface RecurringSummary {
+  created: number;
+  blocked: RecurringRule[];
+}
+
 interface State {
   hydrated: boolean;
   users: User[];
   sessionUserId: string | null;
   data: Record<string, UserData>;
+  settings: Settings;
+
+  setSettings(patch: Partial<Settings>): void;
 
   register(name: string, email: string, password: string): Promise<Result>;
   login(email: string, password: string): Promise<Result>;
@@ -58,6 +91,15 @@ interface State {
   saveGoal(g: Omit<Goal, 'id' | 'createdAt'> & { id?: string }): Result;
   addGoalFunds(id: string, amount: number): Result;
   deleteGoal(id: string): Result;
+
+  saveRecurring(r: Omit<RecurringRule, 'id' | 'createdAt' | 'occurrences'> & { id?: string }): Result;
+  setRecurringActive(id: string, active: boolean): Result;
+  deleteRecurring(id: string): Result;
+  /** Records all due recurring transactions for the signed-in user. */
+  runRecurring(): RecurringSummary;
+
+  /** Replaces the signed-in user's data with a JSON backup. */
+  restoreBackup(json: string): Result;
 }
 
 export const useStore = create<State>()(
@@ -91,6 +133,11 @@ export const useStore = create<State>()(
         users: [],
         sessionUserId: null,
         data: {},
+        settings: DEFAULT_SETTINGS,
+
+        setSettings(patch) {
+          set((s) => ({ settings: { ...s.settings, ...patch } }));
+        },
 
         async register(name, email, password) {
           const cleanEmail = email.trim().toLowerCase();
@@ -237,6 +284,7 @@ export const useStore = create<State>()(
             ...d,
             pockets: d.pockets.filter((p) => p.id !== id),
             goals: d.goals.map((g) => (g.pocketId === id ? { ...g, pocketId: null } : g)),
+            recurring: d.recurring.map((r) => (r.pocketId === id ? { ...r, active: false } : r)),
           }));
         },
 
@@ -280,13 +328,90 @@ export const useStore = create<State>()(
         deleteGoal(id) {
           return mutate((d) => ({ ...d, goals: d.goals.filter((g) => g.id !== id) }));
         },
+
+        saveRecurring({ id, ...fields }) {
+          const err = positive(fields.amount);
+          if (err) return err;
+          if (fields.type === 'EXPENSE' && !fields.pocketId) return 'Pilih Pocket untuk pengeluaran berulang.';
+          if (fields.endDate && fields.endDate < fields.startDate) return 'Tanggal berakhir harus setelah tanggal mulai.';
+          const rule = { ...fields, note: fields.note.trim(), pocketId: fields.type === 'EXPENSE' ? fields.pocketId : null };
+          return mutate((d) => {
+            if (!id) {
+              return {
+                ...d,
+                recurring: [...d.recurring, { ...rule, id: newId(), occurrences: 0, createdAt: nowISO() }],
+              };
+            }
+            return {
+              ...d,
+              recurring: d.recurring.map((r) => {
+                if (r.id !== id) return r;
+                if (r.startDate === rule.startDate && r.frequency === rule.frequency) return { ...r, ...rule };
+                // New schedule: continue after the last date this rule already recorded, never repeat it.
+                const last = d.transactions
+                  .filter((t) => t.recurringId === id)
+                  .reduce((max, t) => (t.date > max ? t.date : max), '');
+                let occurrences = 0;
+                while (last && occurrences < 10_000 && occurrenceDate(rule, occurrences) <= last) occurrences++;
+                return { ...r, ...rule, occurrences };
+              }),
+            };
+          });
+        },
+
+        setRecurringActive(id, active) {
+          return mutate((d) => ({
+            ...d,
+            recurring: d.recurring.map((r) => (r.id === id ? { ...r, active } : r)),
+          }));
+        },
+
+        deleteRecurring(id) {
+          return mutate((d) => ({ ...d, recurring: d.recurring.filter((r) => r.id !== id) }));
+        },
+
+        runRecurring() {
+          const { sessionUserId, data } = get();
+          const current = sessionUserId ? data[sessionUserId] : undefined;
+          if (!sessionUserId || !current || current.recurring.length === 0) return { created: 0, blocked: [] };
+          const run = applyRecurring(current, todayISO(), tx);
+          if (run.created > 0) set({ data: { ...data, [sessionUserId]: run.data } });
+          return { created: run.created, blocked: run.blocked };
+        },
+
+        restoreBackup(json) {
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(json);
+          } catch {
+            return 'File bukan backup FinPocket yang valid.';
+          }
+          const wrapper = parsed as { app?: string; data?: unknown };
+          const restored = normalizeData(wrapper?.app === 'FinPocket' ? wrapper.data : parsed);
+          if (!restored) return 'File bukan backup FinPocket yang valid.';
+          const err = mutate(() => restored);
+          return err && `Backup tidak dapat dipulihkan. ${err}`;
+        },
       };
     },
     {
       name: 'finpocket-store',
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: ({ users, sessionUserId, data }) => ({ users, sessionUserId, data }),
+      partialize: ({ users, sessionUserId, data, settings }) => ({ users, sessionUserId, data, settings }),
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<State>;
+        if (version < 2) {
+          const data: Record<string, UserData> = {};
+          for (const [id, d] of Object.entries(state.data ?? {})) data[id] = { ...d, recurring: d.recurring ?? [] };
+          return { ...state, data, settings: DEFAULT_SETTINGS } as State;
+        }
+        return state as State;
+      },
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<State>;
+        return { ...current, ...p, settings: { ...DEFAULT_SETTINGS, ...p.settings } };
+      },
       onRehydrateStorage: () => () => useStore.setState({ hydrated: true }),
     },
   ),

@@ -13,27 +13,28 @@ import {
   Muted,
   Screen,
   Segmented,
-  styles as ui,
+  useUiStyles,
 } from '@/components/ui';
 import { pocketBalance } from '@/lib/finance';
 import { formatRp, todayISO } from '@/lib/format';
 import { useBalances, useData, useStore } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { useColors } from '@/lib/theme';
 import type { Pocket } from '@/lib/types';
 
 type Mode = 'EXPENSE' | 'INCOME' | 'TRANSFER';
 
-const MODE_COLOR: Record<Mode, string> = {
-  EXPENSE: colors.expense,
-  INCOME: colors.income,
-  TRANSFER: colors.transfer,
-};
-
 export default function NewTransactionScreen() {
+  const ui = useUiStyles();
   const params = useLocalSearchParams<{ type?: Mode; pocketId?: string; toPocketId?: string; amount?: string }>();
   const data = useData();
   const balances = useBalances();
   const { addExpense, addIncome, addTransfer } = useStore();
+  const colors = useColors();
+  const MODE_COLOR: Record<Mode, string> = {
+    EXPENSE: colors.expense,
+    INCOME: colors.income,
+    TRANSFER: colors.transfer,
+  };
 
   const lastExpensePocket = useMemo(() => {
     const active = new Set(data.pockets.filter((p) => !p.archived && !p.isLocked).map((p) => p.id));

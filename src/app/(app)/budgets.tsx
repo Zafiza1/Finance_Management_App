@@ -6,9 +6,10 @@ import { AmountField, Button, Card, Muted, ProgressBar, Screen } from '@/compone
 import { budgetStatus, currentMonthPeriod, pocketSpent } from '@/lib/finance';
 import { formatRp, monthLabel, parseISODate, todayISO } from '@/lib/format';
 import { useData, useStore } from '@/lib/store';
-import { budgetColors, colors } from '@/lib/theme';
+import { budgetColors, useColors } from '@/lib/theme';
 
 export default function BudgetsScreen() {
+  const colors = useColors();
   const data = useData();
   const savePocket = useStore((s) => s.savePocket);
   const today = todayISO();

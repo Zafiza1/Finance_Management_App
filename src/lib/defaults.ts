@@ -81,5 +81,6 @@ export function createDefaultData(newId: () => string, now: string): UserData {
     transactions: [],
     transfers: [],
     goals: [],
+    recurring: [],
   };
 }

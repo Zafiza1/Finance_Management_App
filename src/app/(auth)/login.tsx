@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 
 import { Button, Card, Field, Muted, Screen, Segmented } from '@/components/ui';
 import { useStore } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { makeStyles } from '@/lib/theme';
 
 export default function AuthScreen() {
+  const s = useStyles();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -60,9 +61,9 @@ export default function AuthScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   hero: { alignItems: 'center', gap: 4, marginBottom: 12 },
   logo: { fontSize: 56 },
   brand: { fontSize: 32, fontWeight: '800', color: colors.primary },
   error: { color: colors.expense, fontWeight: '600' },
-});
+}));

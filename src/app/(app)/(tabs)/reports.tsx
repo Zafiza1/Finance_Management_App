@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { Card, Empty, Muted, ProgressBar, Screen, SectionHeader, Title } from '@/components/ui';
 import {
@@ -13,9 +13,11 @@ import {
 } from '@/lib/finance';
 import { formatRp, monthLabel, parseISODate, todayISO } from '@/lib/format';
 import { useBalances, useData } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { makeStyles, useColors } from '@/lib/theme';
 
 export default function ReportsScreen() {
+  const s = useStyles();
+  const colors = useColors();
   const data = useData();
   const balances = useBalances();
   const today = todayISO();
@@ -99,6 +101,7 @@ export default function ReportsScreen() {
 }
 
 function Stat({ label, value, color }: { label: string; value: number; color: string }) {
+  const s = useStyles();
   return (
     <Card style={s.stat}>
       <Muted>{label}</Muted>
@@ -110,6 +113,7 @@ function Stat({ label, value, color }: { label: string; value: number; color: st
 }
 
 function Breakdown({ slices, total }: { slices: Slice[]; total: number }) {
+  const s = useStyles();
   return (
     <Card>
       {slices.length === 0 ? (
@@ -136,7 +140,7 @@ function Breakdown({ slices, total }: { slices: Slice[]; total: number }) {
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   arrow: { fontSize: 30, color: colors.primary, paddingHorizontal: 12 },
   month: { fontSize: 17, fontWeight: '700', color: colors.text },
@@ -149,4 +153,4 @@ const s = StyleSheet.create({
   sliceName: { fontWeight: '600', color: colors.text },
   sliceAmount: { fontWeight: '700', color: colors.text },
   slicePct: { color: colors.muted, fontWeight: '500' },
-});
+}));

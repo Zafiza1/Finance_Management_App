@@ -1,13 +1,13 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { SectionList, StyleSheet, Text, View } from 'react-native';
+import { SectionList, Text, View } from 'react-native';
 
 import { ActivityRow } from '@/components/finance';
 import { Chip, ChipRow, Empty } from '@/components/ui';
 import { buildActivity, type ActivityKind } from '@/lib/finance';
 import { formatDayHeader } from '@/lib/format';
 import { useData } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { makeStyles, useColors } from '@/lib/theme';
 
 const FILTERS: { value: ActivityKind | 'ALL'; label: string }[] = [
   { value: 'ALL', label: 'Semua' },
@@ -18,6 +18,8 @@ const FILTERS: { value: ActivityKind | 'ALL'; label: string }[] = [
 ];
 
 export default function HistoryScreen() {
+  const s = useStyles();
+  const colors = useColors();
   const { pocketId } = useLocalSearchParams<{ pocketId?: string }>();
   const data = useData();
   const [filter, setFilter] = useState<ActivityKind | 'ALL'>('ALL');
@@ -65,7 +67,7 @@ export default function HistoryScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   header: { marginTop: 16, marginBottom: 6, fontWeight: '700', color: colors.muted },
   item: { backgroundColor: colors.card, paddingHorizontal: 12, borderRadius: 12, marginBottom: 6 },
-});
+}));

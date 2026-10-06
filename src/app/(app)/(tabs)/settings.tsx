@@ -1,22 +1,18 @@
 import { router } from 'expo-router';
-import { Alert, Share } from 'react-native';
+import { Alert } from 'react-native';
 
-import { Card, ListRow, Muted, Screen, SectionHeader, Title } from '@/components/ui';
-import { todayISO } from '@/lib/format';
+import { Card, ListRow, Muted, Screen, SectionHeader, Segmented, Title } from '@/components/ui';
 import { useCurrentUser, useData, useStore } from '@/lib/store';
+import type { ThemePref } from '@/lib/theme';
 
 export default function SettingsScreen() {
   const user = useCurrentUser();
   const data = useData();
   const logout = useStore((s) => s.logout);
-
-  const exportData = () =>
-    Share.share({
-      title: `FinPocket backup ${todayISO()}`,
-      message: JSON.stringify({ app: 'FinPocket', exportedAt: new Date().toISOString(), data }, null, 2),
-    });
-
-  const comingSoon = (feature: string) => Alert.alert(feature, 'Fitur ini akan hadir setelah versi MVP.');
+  const settings = useStore((s) => s.settings);
+  const setSettings = useStore((s) => s.setSettings);
+  const activeRecurring = data.recurring.filter((r) => r.active).length;
+  const notifCount = [settings.dailyReminder, settings.budgetAlerts, settings.recurringAlerts].filter(Boolean).length;
 
   return (
     <Screen edges={['top']}>
@@ -31,15 +27,41 @@ export default function SettingsScreen() {
         <ListRow icon="🏷️" title="Kategori" onPress={() => router.push('/categories')} />
         <ListRow icon="📏" title="Budget" subtitle="Batas pengeluaran bulanan" onPress={() => router.push('/budgets')} />
         <ListRow icon="🧾" title="Riwayat Transaksi" onPress={() => router.push('/history')} />
-        <ListRow icon="🔁" title="Transaksi Berulang" subtitle="Segera hadir" onPress={() => comingSoon('Transaksi Berulang')} />
+        <ListRow
+          icon="🔁"
+          title="Transaksi Berulang"
+          subtitle={activeRecurring > 0 ? `${activeRecurring} jadwal aktif` : 'Gaji, tagihan, langganan otomatis'}
+          onPress={() => router.push('/recurring')}
+        />
       </Card>
 
       <SectionHeader title="Aplikasi" />
       <Card style={{ paddingVertical: 4 }}>
         <ListRow icon="💱" title="Mata Uang" subtitle="Rupiah (IDR)" />
-        <ListRow icon="🎨" title="Tema" subtitle="Terang" onPress={() => comingSoon('Tema Gelap')} />
-        <ListRow icon="📤" title="Backup / Export Data" subtitle="Bagikan data sebagai JSON" onPress={exportData} />
+        <ListRow
+          icon="🔔"
+          title="Notifikasi"
+          subtitle={notifCount > 0 ? `${notifCount} pengingat aktif` : 'Pengingat harian & peringatan budget'}
+          onPress={() => router.push('/notifications')}
+        />
+        <ListRow
+          icon="📤"
+          title="Export & Backup"
+          subtitle="Excel, PDF, backup & pulihkan data"
+          onPress={() => router.push('/export')}
+        />
       </Card>
+
+      <SectionHeader title="Tema" />
+      <Segmented<ThemePref>
+        value={settings.theme}
+        onChange={(theme) => setSettings({ theme })}
+        options={[
+          { value: 'system', label: 'Sistem' },
+          { value: 'light', label: '☀️ Terang' },
+          { value: 'dark', label: '🌙 Gelap' },
+        ]}
+      />
 
       <Card style={{ paddingVertical: 4 }}>
         <ListRow
@@ -53,7 +75,9 @@ export default function SettingsScreen() {
           }
         />
       </Card>
-      <Muted style={{ textAlign: 'center' }}>FinPocket v1.0.0</Muted>
+      <Muted style={{ textAlign: 'center' }}>
+        FinPocket v1.0.0 · Semua data tersimpan offline di perangkat ini
+      </Muted>
     </Screen>
   );
 }

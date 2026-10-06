@@ -1,15 +1,17 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
 
-import { Button, Card, Muted, Screen, styles as ui } from '@/components/ui';
-import { AmountField } from '@/components/ui';
+import { AmountField, Button, Card, Muted, Screen, useUiStyles } from '@/components/ui';
 import { pocketBalance } from '@/lib/finance';
 import { formatRp, todayISO } from '@/lib/format';
 import { useBalances, useData, useStore } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { makeStyles, useColors } from '@/lib/theme';
 
 export default function AllocateScreen() {
+  const s = useStyles();
+  const ui = useUiStyles();
+  const colors = useColors();
   const data = useData();
   const balances = useBalances();
   const allocate = useStore((s) => s.allocate);
@@ -86,9 +88,9 @@ export default function AllocateScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   big: { fontSize: 28, fontWeight: '800', color: colors.text },
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   value: { fontWeight: '700', color: colors.text },
   error: { color: colors.expense, fontWeight: '700' },
-});
+}));

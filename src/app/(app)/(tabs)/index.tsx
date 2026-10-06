@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { ActivityRow, GoalCard, PocketCard } from '@/components/finance';
 import { Banner, Card, Empty, Muted, Screen, SectionHeader } from '@/components/ui';
@@ -14,16 +13,18 @@ import {
 } from '@/lib/finance';
 import { formatRp, monthLabel, parseISODate, todayISO } from '@/lib/format';
 import { useBalances, useCurrentUser, useData } from '@/lib/store';
-import { colors } from '@/lib/theme';
+import { makeStyles } from '@/lib/theme';
 
 export default function HomeScreen() {
+  const s = useStyles();
   const data = useData();
   const balances = useBalances();
   const user = useCurrentUser();
   const today = todayISO();
   const now = parseISODate(today);
 
-  const view = useMemo(() => {
+  // Recomputed on render; the React Compiler memoizes it.
+  const view = (() => {
     const period = currentMonthPeriod(today);
     const pockets = data.pockets.filter((p) => !p.archived);
     const budgets = pockets.map((p) => ({ pocket: p, status: pocketBudgetStatus(data, p, today) }));
@@ -35,7 +36,7 @@ export default function HomeScreen() {
       limit: dailyLimit(data, balances, today),
       recent: buildActivity(data).slice(0, 5),
     };
-  }, [data, balances, today]);
+  })();
 
   return (
     <Screen edges={['top']}>
@@ -131,6 +132,7 @@ export default function HomeScreen() {
 }
 
 function QuickAction({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+  const s = useStyles();
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [s.action, pressed && { opacity: 0.6 }]}>
       <Text style={{ fontSize: 22 }}>{icon}</Text>
@@ -139,7 +141,7 @@ function QuickAction({ icon, label, onPress }: { icon: string; label: string; on
   );
 }
 
-const s = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   heading: { fontSize: 22, fontWeight: '800', color: colors.text },
   hero: { backgroundColor: colors.primary, borderRadius: 20, padding: 20, gap: 4 },
   heroLabel: { color: '#CCFBF1', fontSize: 13, fontWeight: '600' },
@@ -158,4 +160,4 @@ const s = StyleSheet.create({
   actionLabel: { fontSize: 11, fontWeight: '600', color: colors.text },
   limit: { fontSize: 22, fontWeight: '800', color: colors.text },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-});
+}));
