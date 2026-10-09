@@ -103,7 +103,13 @@ export function ActivityRow({ item }: { item: Activity }) {
   const ui = useUiStyles();
   const k = kindStyle(item.kind, useColors());
   return (
-    <Pressable onPress={() => showActivity(item, k)} style={({ pressed }) => [ui.listRow, pressed && { opacity: 0.6 }]}>
+    <Pressable
+      onPress={() =>
+        item.hasPhoto
+          ? router.push({ pathname: '/transaction/[id]', params: { id: item.id } })
+          : showActivity(item, k)
+      }
+      style={({ pressed }) => [ui.listRow, pressed && { opacity: 0.6 }]}>
       <Text style={ui.listIcon}>{item.icon}</Text>
       <View style={{ flex: 1 }}>
         <Text style={ui.listTitle} numberOfLines={1}>

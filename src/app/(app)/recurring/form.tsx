@@ -8,7 +8,7 @@ import {
   Button,
   Chip,
   ChipRow,
-  DateStepper,
+  DatePicker,
   Field,
   Muted,
   Screen,
@@ -132,12 +132,12 @@ export default function RecurringFormScreen() {
           ))}
         </ChipRow>
 
-        <DateStepper label="Mulai tanggal" value={startDate} onChange={setStartDate} />
+        <DatePicker label="Mulai tanggal" value={startDate} onChange={setStartDate} />
         <Muted>Jadwal: {preview.map(formatDate).join(', ')}, …</Muted>
 
         {endDate ? (
           <>
-            <DateStepper label="Berakhir tanggal (‹ › per bulan)" value={endDate} onChange={setEndDate} monthSteps />
+            <DatePicker label="Berakhir tanggal" value={endDate} onChange={setEndDate} minDate={startDate} />
             <Button title="Tanpa tanggal berakhir" variant="ghost" onPress={() => setEndDate(null)} />
           </>
         ) : (

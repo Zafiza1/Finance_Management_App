@@ -9,7 +9,7 @@ import {
   Card,
   Chip,
   ChipRow,
-  DateStepper,
+  DatePicker,
   Field,
   Muted,
   Screen,
@@ -94,7 +94,7 @@ export default function GoalFormScreen() {
         <AmountField label="Target nominal" value={target} onChange={setTarget} />
         {targetDate ? (
           <>
-            <DateStepper label="Target tanggal (‹ › per bulan)" value={targetDate} onChange={setTargetDate} monthSteps />
+            <DatePicker label="Target tanggal" value={targetDate} onChange={setTargetDate} minDate={todayISO()} />
             <Button title="Tanpa target tanggal" variant="ghost" onPress={() => setTargetDate(null)} />
           </>
         ) : (

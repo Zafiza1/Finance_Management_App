@@ -29,6 +29,13 @@
       "expo-status-bar",
       "expo-sharing",
       [
+        "expo-image-picker",
+        {
+          "cameraPermission": "FinPocket memakai kamera untuk memotret pengeluaranmu.",
+          "photosPermission": "FinPocket membuka galeri agar kamu bisa memilih foto pengeluaran."
+        }
+      ],
+      [
         "expo-notifications",
         {
           "color": "#0F766E"

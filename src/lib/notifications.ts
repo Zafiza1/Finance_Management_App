@@ -1,4 +1,5 @@
-import * as Notifications from 'expo-notifications';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import type * as NotificationsModule from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import { nextRecurringDate, pocketBudgetStatus, type BudgetLevel } from './finance';
@@ -8,6 +9,20 @@ import type { UserData } from './types';
 
 /** All notifications are scheduled on the device itself; no push server is involved. */
 
+/**
+ * Expo Go on Android no longer bundles expo-notifications (SDK 53+) and merely
+ * importing it there throws, so the module is only loaded where it exists.
+ * Notifications work in a development build (`npx expo run:android`).
+ */
+export const notificationsSupported =
+  Platform.OS !== 'web' &&
+  !(Platform.OS === 'android' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient);
+
+const Notifications: typeof NotificationsModule | null = notificationsSupported
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('expo-notifications')
+  : null;
+
 const CHANNEL_ID = 'reminders';
 const DAILY_ID = 'daily-reminder';
 const RECURRING_PREFIX = 'recurring-';
@@ -16,17 +31,20 @@ const RECURRING_HOUR = 8;
 const LEVEL_RANK: Record<BudgetLevel, number> = { safe: 0, watch: 1, near: 2, done: 3, over: 4 };
 
 export async function hasPermission(): Promise<boolean> {
+  if (!Notifications) return false;
   return (await Notifications.getPermissionsAsync()).granted;
 }
 
 /** Asks for permission if needed. Returns false when the user declines. */
 export async function ensurePermission(): Promise<boolean> {
+  if (!Notifications) return false;
   if (await hasPermission()) return true;
   return (await Notifications.requestPermissionsAsync()).granted;
 }
 
 /** Re-creates every scheduled notification from the current settings and data. */
 export async function syncScheduledNotifications() {
+  if (!Notifications) return;
   const { settings, sessionUserId, data } = useStore.getState();
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   await Promise.all(
@@ -91,7 +109,7 @@ let started = false;
  * immediate alert when a pocket's budget crosses into "near", "done" or "over".
  */
 export function startNotifications() {
-  if (started || Platform.OS === 'web') return;
+  if (started || !Notifications) return;
   started = true;
 
   Notifications.setNotificationHandler({

@@ -1,7 +1,7 @@
 import { Alert, Linking, Pressable, Switch, Text, View } from 'react-native';
 
 import { Card, Muted, Screen, useUiStyles } from '@/components/ui';
-import { ensurePermission } from '@/lib/notifications';
+import { ensurePermission, notificationsSupported } from '@/lib/notifications';
 import { useStore } from '@/lib/store';
 import { useColors } from '@/lib/theme';
 import type { Settings } from '@/lib/types';
@@ -17,6 +17,13 @@ export default function NotificationsScreen() {
 
   /** Turning any notification on asks for permission first. */
   const toggle = async (key: 'dailyReminder' | 'budgetAlerts' | 'recurringAlerts', value: boolean) => {
+    if (value && !notificationsSupported) {
+      Alert.alert(
+        'Notifikasi tidak tersedia',
+        'Notifikasi tidak didukung di Expo Go (Android) atau web. Gunakan development build untuk mencobanya.',
+      );
+      return;
+    }
     if (value && !(await ensurePermission())) {
       Alert.alert('Izin notifikasi ditolak', 'Aktifkan notifikasi untuk FinPocket di Pengaturan HP.', [
         { text: 'Nanti', style: 'cancel' },

@@ -44,6 +44,7 @@ export default function AppLayout() {
     >
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="transaction/new" options={{ presentation: 'modal', title: 'Tambah Transaksi' }} />
+      <Stack.Screen name="transaction/[id]" options={{ title: 'Detail Pengeluaran' }} />
       <Stack.Screen name="allocate" options={{ title: 'Bagi ke Pocket' }} />
       <Stack.Screen name="history" options={{ title: 'Riwayat Transaksi' }} />
       <Stack.Screen name="pockets" options={{ title: 'Kelola Pocket' }} />
@@ -57,6 +58,7 @@ export default function AppLayout() {
       <Stack.Screen name="notifications" options={{ title: 'Notifikasi' }} />
       <Stack.Screen name="export" options={{ title: 'Export & Backup' }} />
       <Stack.Screen name="profile" options={{ title: 'Profil' }} />
+      <Stack.Screen name="food-ai" options={{ title: 'Analisis Gizi' }} />
     </Stack>
   );
 }

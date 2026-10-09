@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +14,16 @@ import {
 } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 
-import { addDays, addMonths, formatDate, formatNumber, parseAmount, todayISO } from '@/lib/format';
+import {
+  daysInMonth,
+  formatDate,
+  formatNumber,
+  monthLabel,
+  parseAmount,
+  parseISODate,
+  todayISO,
+  toISODate,
+} from '@/lib/format';
 import { makeStyles, radius, useColors } from '@/lib/theme';
 
 export function Screen({
@@ -256,36 +266,164 @@ export function Segmented<T extends string>({
   );
 }
 
-export function DateStepper({
+const WEEKDAYS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+
+/** Date field that opens a month calendar. Values are local ISO dates (YYYY-MM-DD). */
+export function DatePicker({
   label,
   value,
   onChange,
-  monthSteps,
+  minDate,
 }: {
   label: string;
   value: string;
   onChange: (iso: string) => void;
-  monthSteps?: boolean;
+  minDate?: string;
 }) {
   const styles = useUiStyles();
-  const step = (n: number) => onChange(monthSteps ? addMonths(value, n) : addDays(value, n));
+  const [open, setOpen] = useState(false);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.dateRow}>
-        <Pressable style={styles.dateBtn} onPress={() => step(-1)} hitSlop={6}>
-          <Text style={styles.dateBtnText}>‹</Text>
-        </Pressable>
-        <Pressable style={{ flex: 1 }} onPress={() => onChange(todayISO())}>
-          <Text style={styles.dateText}>{formatDate(value)}</Text>
-          {value !== todayISO() && <Text style={styles.dateHint}>Ketuk untuk kembali ke hari ini</Text>}
-        </Pressable>
-        <Pressable style={styles.dateBtn} onPress={() => step(1)} hitSlop={6}>
-          <Text style={styles.dateBtnText}>›</Text>
-        </Pressable>
-      </View>
+      <Pressable
+        style={({ pressed }) => [styles.dateField, pressed && { opacity: 0.7 }]}
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`${label}: ${formatDate(value)}`}
+      >
+        <Text style={styles.dateFieldIcon}>📅</Text>
+        <Text style={styles.dateText}>{formatDate(value)}</Text>
+        {value === todayISO() && <Text style={styles.dateHint}>Hari ini</Text>}
+      </Pressable>
+      {open && (
+        <CalendarModal
+          value={value}
+          minDate={minDate}
+          onClose={() => setOpen(false)}
+          onSelect={(iso) => {
+            onChange(iso);
+            setOpen(false);
+          }}
+        />
+      )}
     </View>
   );
+}
+
+/** Mounted only while open, so it always starts on the month of the current value. */
+function CalendarModal({
+  value,
+  minDate,
+  onClose,
+  onSelect,
+}: {
+  value: string;
+  minDate?: string;
+  onClose: () => void;
+  onSelect: (iso: string) => void;
+}) {
+  const styles = useUiStyles();
+  const colors = useColors();
+  const [cursor, setCursor] = useState(() => monthStart(value));
+
+  const { year, month } = cursor;
+  const today = todayISO();
+  const offset = new Date(year, month, 1).getDay();
+  const cells: (number | null)[] = [
+    ...Array.from({ length: offset }, () => null),
+    ...Array.from({ length: daysInMonth(year, month) }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const shift = (months: number) => {
+    const d = new Date(year, month + months, 1);
+    setCursor({ year: d.getFullYear(), month: d.getMonth() });
+  };
+
+  const nav = (text: string, months: number, a11y: string) => (
+    <Pressable style={styles.calNav} onPress={() => shift(months)} hitSlop={6} accessibilityLabel={a11y}>
+      <Text style={styles.calNavText}>{text}</Text>
+    </Pressable>
+  );
+
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.calBackdrop} onPress={onClose}>
+        {/* Inner Pressable swallows taps so only the backdrop closes the calendar. */}
+        <Pressable style={styles.calSheet} onPress={() => {}}>
+          <View style={styles.calHeader}>
+            {nav('«', -12, 'Tahun sebelumnya')}
+            {nav('‹', -1, 'Bulan sebelumnya')}
+            <Text style={styles.calTitle}>{monthLabel(year, month)}</Text>
+            {nav('›', 1, 'Bulan berikutnya')}
+            {nav('»', 12, 'Tahun berikutnya')}
+          </View>
+
+          <View style={styles.calRow}>
+            {WEEKDAYS.map((d) => (
+              <Text key={d} style={styles.calWeekday}>
+                {d}
+              </Text>
+            ))}
+          </View>
+
+          {Array.from({ length: cells.length / 7 }, (_, w) => (
+            <View key={w} style={styles.calRow}>
+              {cells.slice(w * 7, w * 7 + 7).map((day, i) => {
+                if (!day) return <View key={i} style={styles.calCell} />;
+                const iso = toISODate(new Date(year, month, day));
+                const selected = iso === value;
+                const disabled = !!minDate && iso < minDate;
+                return (
+                  <Pressable
+                    key={i}
+                    style={styles.calCell}
+                    disabled={disabled}
+                    onPress={() => onSelect(iso)}
+                    accessibilityLabel={formatDate(iso)}
+                  >
+                    <View
+                      style={[
+                        styles.calDay,
+                        iso === today && { borderColor: colors.primary },
+                        selected && { backgroundColor: colors.primary, borderColor: colors.primary },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.calDayText,
+                          selected && { color: '#fff', fontWeight: '700' },
+                          disabled && { color: colors.border },
+                        ]}
+                      >
+                        {day}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+
+          <View style={styles.calFooter}>
+            <Button
+              title="Hari ini"
+              variant="secondary"
+              disabled={!!minDate && today < minDate}
+              onPress={() => onSelect(today)}
+              style={{ flex: 1 }}
+            />
+            <Button title="Batal" variant="ghost" onPress={onClose} style={{ flex: 1 }} />
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function monthStart(iso: string) {
+  const d = parseISODate(iso);
+  return { year: d.getFullYear(), month: d.getMonth() };
 }
 
 export function ListRow({
@@ -419,18 +557,47 @@ export const useUiStyles = makeStyles((colors) => ({
   segmented: { flexDirection: 'row', backgroundColor: colors.border, borderRadius: 12, padding: 4 },
   segment: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
   segmentText: { fontWeight: '700', color: colors.muted },
-  dateRow: {
+  dateField: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
     backgroundColor: colors.card,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
-  dateBtn: { paddingHorizontal: 18, paddingVertical: 10 },
-  dateBtnText: { fontSize: 24, color: colors.primary, fontWeight: '700' },
-  dateText: { textAlign: 'center', fontSize: 16, fontWeight: '600', color: colors.text },
-  dateHint: { textAlign: 'center', fontSize: 11, color: colors.muted },
+  dateFieldIcon: { fontSize: 18 },
+  dateText: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.text },
+  dateHint: { fontSize: 12, color: colors.muted },
+  calBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: 16 },
+  calSheet: {
+    backgroundColor: colors.card,
+    borderRadius: radius,
+    padding: 12,
+    gap: 4,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+  },
+  calHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  calNav: { paddingHorizontal: 10, paddingVertical: 6 },
+  calNavText: { fontSize: 22, color: colors.primary, fontWeight: '700' },
+  calTitle: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '700', color: colors.text },
+  calRow: { flexDirection: 'row' },
+  calWeekday: { flex: 1, textAlign: 'center', fontSize: 12, fontWeight: '600', color: colors.muted, paddingVertical: 4 },
+  calCell: { flex: 1, aspectRatio: 1, padding: 2 },
+  calDay: {
+    flex: 1,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  calDayText: { fontSize: 15, color: colors.text },
+  calFooter: { flexDirection: 'row', gap: 8, marginTop: 6 },
   listRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   listIcon: { fontSize: 24, width: 36, textAlign: 'center' },
   listTitle: { fontSize: 15, fontWeight: '600', color: colors.text },

@@ -1,14 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Text } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 
 import { PocketPicker } from '@/components/finance';
+import { FoodAnalysisCard } from '@/components/food';
 import {
   AmountField,
   Button,
   Chip,
   ChipRow,
-  DateStepper,
+  DatePicker,
   Field,
   Muted,
   Screen,
@@ -16,19 +17,30 @@ import {
   useUiStyles,
 } from '@/components/ui';
 import { pocketBalance } from '@/lib/finance';
+import { analyzeFood } from '@/lib/food';
 import { formatRp, todayISO } from '@/lib/format';
+import { deletePhoto, persistPhoto, pickPhoto, type PickedPhoto } from '@/lib/photo';
 import { useBalances, useData, useStore } from '@/lib/store';
-import { useColors } from '@/lib/theme';
-import type { Pocket } from '@/lib/types';
+import { makeStyles, radius, useColors } from '@/lib/theme';
+import type { FoodAnalysis, Pocket } from '@/lib/types';
 
 type Mode = 'EXPENSE' | 'INCOME' | 'TRANSFER';
 
+type Analysis =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'food'; food: FoodAnalysis }
+  | { status: 'notFood' }
+  | { status: 'error'; message: string };
+
 export default function NewTransactionScreen() {
   const ui = useUiStyles();
+  const s = useStyles();
   const params = useLocalSearchParams<{ type?: Mode; pocketId?: string; toPocketId?: string; amount?: string }>();
   const data = useData();
   const balances = useBalances();
   const { addExpense, addIncome, addTransfer } = useStore();
+  const apiKey = useStore((st) => st.settings.geminiApiKey.trim());
   const colors = useColors();
   const MODE_COLOR: Record<Mode, string> = {
     EXPENSE: colors.expense,
@@ -52,6 +64,11 @@ export default function NewTransactionScreen() {
   const [date, setDate] = useState(todayISO());
   const [note, setNote] = useState('');
   const [resume, setResume] = useState<{ pocketId: string; amount: number } | null>(null);
+  const [photo, setPhoto] = useState<PickedPhoto | null>(null);
+  const [analysis, setAnalysis] = useState<Analysis>({ status: 'idle' });
+  const [saving, setSaving] = useState(false);
+  /** Ignores analysis results for a photo that has since been replaced. */
+  const photoSeq = useRef(0);
 
   const categories = data.categories.filter((c) => c.type === (mode === 'INCOME' ? 'INCOME' : 'EXPENSE'));
   const pocket = data.pockets.find((p) => p.id === pocketId);
@@ -67,7 +84,50 @@ export default function NewTransactionScreen() {
     ]);
   };
 
+  const takePhoto = async (source: 'camera' | 'library') => {
+    let picked: PickedPhoto | null;
+    try {
+      picked = await pickPhoto(source);
+    } catch (e) {
+      return fail(e instanceof Error ? e.message : 'Foto tidak dapat diambil.');
+    }
+    if (!picked) return;
+    const seq = ++photoSeq.current;
+    setPhoto(picked);
+    if (!apiKey) return setAnalysis({ status: 'idle' });
+    setAnalysis({ status: 'loading' });
+    try {
+      const food = await analyzeFood(picked.base64, apiKey);
+      if (seq === photoSeq.current) setAnalysis(food ? { status: 'food', food } : { status: 'notFood' });
+    } catch (e) {
+      if (seq === photoSeq.current) {
+        setAnalysis({ status: 'error', message: e instanceof Error ? e.message : 'Analisis gagal.' });
+      }
+    }
+  };
+
+  const recordExpense = async (p: Pocket) => {
+    if (!photo) return;
+    setSaving(true);
+    let photoUri: string;
+    try {
+      photoUri = await persistPhoto(photo.uri);
+    } catch {
+      setSaving(false);
+      return fail('Foto tidak dapat disimpan.');
+    }
+    const food = analysis.status === 'food' ? analysis.food : undefined;
+    const err = addExpense({ amount, pocketId: p.id, categoryId: null, date, note: food?.name ?? '', photoUri, food });
+    setSaving(false);
+    if (err) {
+      deletePhoto(photoUri);
+      return fail(err);
+    }
+    router.back();
+  };
+
   const saveExpense = () => {
+    if (!photo) return fail('Ambil foto pengeluaran terlebih dahulu.');
     if (!pocket) return fail('Pilih Pocket yang digunakan.');
     const balance = pocketBalance(balances, pocket.id);
     if (amount > balance) {
@@ -81,11 +141,12 @@ export default function NewTransactionScreen() {
       );
       return;
     }
-    confirmLocked(pocket, () => {
-      const err = addExpense({ amount, pocketId: pocket.id, categoryId, date, note: note.trim() });
-      if (err) return fail(err);
-      router.back();
-    });
+    const proceed = () => confirmLocked(pocket, () => recordExpense(pocket));
+    if (analysis.status !== 'loading') return proceed();
+    Alert.alert('Analisis makanan belum selesai', 'Simpan sekarang tanpa info gizi?', [
+      { text: 'Tunggu', style: 'cancel' },
+      { text: 'Simpan', onPress: proceed },
+    ]);
   };
 
   /** Switches the form to a transfer that tops up the short pocket, then resumes the expense. */
@@ -145,7 +206,56 @@ export default function NewTransactionScreen() {
           ]}
         />
 
-        <AmountField value={amount} onChange={setAmount} autoFocus large />
+        {mode === 'EXPENSE' && (
+          <>
+            {photo ? (
+              <View style={s.photoWrap}>
+                <Image source={{ uri: photo.uri }} style={s.photo} resizeMode="cover" />
+                <View style={s.photoActions}>
+                  <Pressable style={s.photoBtn} onPress={() => takePhoto('camera')}>
+                    <Text style={s.photoBtnText}>📷 Foto ulang</Text>
+                  </Pressable>
+                  <Pressable style={s.photoBtn} onPress={() => takePhoto('library')}>
+                    <Text style={s.photoBtnText}>🖼️ Galeri</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [s.photoEmpty, pressed && { opacity: 0.7 }]}
+                onPress={() => takePhoto('camera')}
+                accessibilityRole="button"
+              >
+                <Text style={{ fontSize: 40 }}>📷</Text>
+                <Text style={s.photoEmptyTitle}>Foto pengeluaranmu</Text>
+                <Muted>Makanan, struk, atau barang yang dibeli</Muted>
+                <Pressable onPress={() => takePhoto('library')} hitSlop={8} style={{ marginTop: 6 }}>
+                  <Text style={ui.link}>atau pilih dari galeri</Text>
+                </Pressable>
+              </Pressable>
+            )}
+
+            {analysis.status === 'loading' && (
+              <View style={s.analysisRow}>
+                <ActivityIndicator color={colors.primary} />
+                <Muted>Menganalisis makanan…</Muted>
+              </View>
+            )}
+            {analysis.status === 'food' && <FoodAnalysisCard food={analysis.food} />}
+            {analysis.status === 'error' && <Muted style={{ color: colors.expense }}>⚠️ {analysis.message}</Muted>}
+            {photo && !apiKey && (
+              <Muted>💡 Isi API key di Pengaturan → Analisis Gizi agar info gizi makanan muncul otomatis.</Muted>
+            )}
+          </>
+        )}
+
+        <AmountField
+          label={mode === 'EXPENSE' ? 'Harga' : undefined}
+          value={amount}
+          onChange={setAmount}
+          autoFocus={mode !== 'EXPENSE'}
+          large
+        />
 
         {mode === 'EXPENSE' && (
           <>
@@ -186,7 +296,7 @@ export default function NewTransactionScreen() {
           </>
         )}
 
-        {mode !== 'TRANSFER' && (
+        {mode === 'INCOME' && (
           <>
             <Text style={ui.label}>Kategori (opsional)</Text>
             <ChipRow>
@@ -203,11 +313,38 @@ export default function NewTransactionScreen() {
           </>
         )}
 
-        <DateStepper label="Tanggal" value={date} onChange={setDate} />
-        <Field label="Catatan (opsional)" value={note} onChangeText={setNote} placeholder="Contoh: Makan siang" />
+        <DatePicker label="Tanggal" value={date} onChange={setDate} />
+        {mode !== 'EXPENSE' && (
+          <Field label="Catatan (opsional)" value={note} onChangeText={setNote} placeholder="Contoh: Gaji bulan ini" />
+        )}
 
-        <Button title="Simpan" onPress={save} style={{ backgroundColor: MODE_COLOR[mode], marginTop: 4 }} />
+        <Button
+          title={saving ? 'Menyimpan…' : 'Simpan'}
+          onPress={save}
+          disabled={saving}
+          style={{ backgroundColor: MODE_COLOR[mode], marginTop: 4 }}
+        />
       </Screen>
     </KeyboardAvoidingView>
   );
 }
+
+const useStyles = makeStyles((colors) => ({
+  photoEmpty: {
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 28,
+    borderRadius: radius,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  photoEmptyTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
+  photoWrap: { borderRadius: radius, overflow: 'hidden', backgroundColor: colors.card },
+  photo: { width: '100%', aspectRatio: 4 / 3 },
+  photoActions: { flexDirection: 'row', position: 'absolute', right: 8, bottom: 8, gap: 6 },
+  photoBtn: { backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
+  photoBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  analysisRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 4 },
+}));

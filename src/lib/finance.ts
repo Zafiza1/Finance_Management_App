@@ -207,6 +207,8 @@ export interface Activity {
   note: string;
   pocketIds: string[];
   categoryId: string | null;
+  /** Set for photo expenses; the row opens the detail screen instead of an alert. */
+  hasPhoto?: boolean;
 }
 
 const KIND_LABEL: Record<ActivityKind, string> = {
@@ -228,7 +230,7 @@ export function buildActivity(data: UserData): Activity[] {
     let title = t.note || cat?.name || KIND_LABEL[t.type];
     let subtitle = cat?.name ?? KIND_LABEL[t.type];
     if (t.type === 'EXPENSE') {
-      icon = cat?.icon ?? pocket?.icon ?? '💸';
+      icon = t.food ? '🍽️' : t.photoUri ? '📷' : cat?.icon ?? pocket?.icon ?? '💸';
       subtitle = [cat?.name, pocketName(t.pocketId)].filter(Boolean).join(' · ');
     } else if (t.type === 'ALLOCATION') {
       icon = pocket?.icon ?? '📥';
@@ -248,6 +250,7 @@ export function buildActivity(data: UserData): Activity[] {
       note: t.note,
       pocketIds: t.pocketId ? [t.pocketId] : [],
       categoryId: t.categoryId,
+      hasPhoto: !!t.photoUri,
     };
   });
 

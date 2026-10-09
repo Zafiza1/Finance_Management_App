@@ -45,6 +45,12 @@ export default function SettingsScreen() {
           onPress={() => router.push('/notifications')}
         />
         <ListRow
+          icon="🍽️"
+          title="Analisis Gizi"
+          subtitle={settings.geminiApiKey ? 'Aktif · info gizi dari foto makanan' : 'Belum aktif · atur API key'}
+          onPress={() => router.push('/food-ai')}
+        />
+        <ListRow
           icon="📤"
           title="Export & Backup"
           subtitle="Excel, PDF, backup & pulihkan data"

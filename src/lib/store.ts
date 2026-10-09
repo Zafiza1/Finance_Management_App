@@ -7,7 +7,8 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { createDefaultData } from './defaults';
 import { applyRecurring, computeBalances, occurrenceDate, validateData } from './finance';
 import { todayISO } from './format';
-import type { Category, Goal, Pocket, RecurringRule, Settings, Transaction, User, UserData } from './types';
+import { deletePhoto } from './photo';
+import type { Category, FoodAnalysis, Goal, Pocket, RecurringRule, Settings, Transaction, User, UserData } from './types';
 
 const newId = () => Crypto.randomUUID();
 const nowISO = () => new Date().toISOString();
@@ -35,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   reminderTime: 20 * 60,
   budgetAlerts: false,
   recurringAlerts: false,
+  geminiApiKey: '',
 };
 
 /** Checks the shape of imported backup data and fills fields added in later versions. */
@@ -75,7 +77,9 @@ interface State {
   updateProfile(name: string): Result;
 
   addIncome(e: NewEntry & { categoryId: string | null }): Result;
-  addExpense(e: NewEntry & { pocketId: string; categoryId: string | null }): Result;
+  addExpense(
+    e: NewEntry & { pocketId: string; categoryId: string | null; photoUri?: string; food?: FoodAnalysis },
+  ): Result;
   addTransfer(e: NewEntry & { fromPocketId: string; toPocketId: string }): Result;
   allocate(allocations: { pocketId: string; amount: number }[], date: string): Result;
   deleteTransaction(id: string): Result;
@@ -195,12 +199,12 @@ export const useStore = create<State>()(
           );
         },
 
-        addExpense({ amount, pocketId, categoryId, date, note }) {
+        addExpense({ amount, pocketId, categoryId, date, note, photoUri, food }) {
           const err = positive(amount) ?? mutate((d) => ({
             ...d,
             transactions: [
               ...d.transactions,
-              tx({ type: 'EXPENSE', amount, pocketId, categoryId, date, note }),
+              tx({ type: 'EXPENSE', amount, pocketId, categoryId, date, note, photoUri, food }),
             ],
           }));
           return err && err.startsWith('Saldo Pocket') ? 'Saldo Pocket tidak mencukupi.' : err;
@@ -233,7 +237,10 @@ export const useStore = create<State>()(
         },
 
         deleteTransaction(id) {
+          const { sessionUserId, data } = get();
+          const photoUri = sessionUserId ? data[sessionUserId]?.transactions.find((t) => t.id === id)?.photoUri : undefined;
           const err = mutate((d) => ({ ...d, transactions: d.transactions.filter((t) => t.id !== id) }));
+          if (!err) deletePhoto(photoUri);
           return err && `Transaksi tidak dapat dihapus. ${err}`;
         },
 
